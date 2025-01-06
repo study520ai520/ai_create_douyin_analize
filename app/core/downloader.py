@@ -18,40 +18,62 @@ from loguru import logger
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 
+# 常用User-Agent列表
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+]
 
 class DouyinDownloader:
-    """抖音下载器"""
+    """抖音视频下载器"""
 
-    # 用户代理列表
-    USER_AGENTS = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edge/120.0.0.0'
-    ]
-
-    def __init__(self, use_proxy: bool = False, proxy_url: str = None):
-        """初始化下载器"""
-        self.session = self._create_session()
-        self.cookies_file = Path("data/cookies.pkl")
+    def __init__(self, use_proxy: bool = False):
+        """初始化下载器
         
-        # 加载或初始化Cookies
-        self._load_cookies()
+        Args:
+            use_proxy: 是否使用代理
+        """
+        # 随机选择一个User-Agent
+        self.user_agent = random.choice(USER_AGENTS)
+        
+        # 设置会话
+        self.session = requests.Session()
+        
+        # 设置重试策略
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        
+        # 设置基本请求头
+        self.session.headers.update({
+            'User-Agent': self.user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0'
+        })
         
         # 设置代理
+        self.proxies = None
         if use_proxy:
-            if proxy_url:
-                self.session.proxies = {
-                    'http': proxy_url,
-                    'https': proxy_url
-                }
-            else:
-                # 使用默认代理
-                self.session.proxies = {
-                    'http': 'http://127.0.0.1:7890',
-                    'https': 'http://127.0.0.1:7890'
-                }
+            # TODO: 添加代理配置
+            pass
+            
+        # 加载cookies
+        self._load_cookies()
 
     def _create_session(self) -> requests.Session:
         """创建请求会话"""

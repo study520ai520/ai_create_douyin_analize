@@ -302,22 +302,13 @@ class DouyinDownloader:
         try:
             # 使用新的API端点
             api_url = f"https://www.douyin.com/aweme/v1/web/aweme/post/"
-            params = {
-                'device_platform': 'webapp',
-                'aid': '6383',
-                'channel': 'channel_pc_web',
+            
+            # 获取API参数
+            params = self._get_api_params()
+            params.update({
                 'sec_user_id': user_id,
-                'max_cursor': max_cursor,
-                'count': 20,
-                'version_code': '170400',
-                'version_name': '17.4.0',
-                'cookie_enabled': 'true',
-                'platform': 'PC',
-                'downlink': '10',
-                'msToken': '',  # 这个参数需要从cookie中获取
-                'X-Bogus': '',  # 这个参数需要从cookie中获取
-                '_signature': ''  # 这个参数需要从cookie中获取
-            }
+                'max_cursor': max_cursor
+            })
             
             headers = {
                 'Accept': 'application/json, text/plain, */*',
@@ -542,3 +533,59 @@ class DouyinDownloader:
         except Exception as e:
             logger.exception(f"批量下载失败: {str(e)}")
             raise 
+
+    def _get_api_params(self) -> Dict[str, str]:
+        """获取API请求需要的特殊参数
+        
+        Returns:
+            Dict[str, str]: 包含msToken、X-Bogus、_signature等参数
+        """
+        try:
+            # 从cookies中获取msToken
+            ms_token = self.session.cookies.get('msToken', '')
+            
+            # 从localStorage中获取X-Bogus和_signature
+            # 这里需要执行JavaScript获取，暂时使用空值
+            x_bogus = ''
+            signature = ''
+            
+            # 获取设备ID
+            did = self.session.cookies.get('passport_did', '')
+            if not did:
+                did = f"7242624631965951489_{int(time.time() * 1000)}"
+            
+            params = {
+                'device_platform': 'webapp',
+                'aid': '6383',
+                'channel': 'channel_pc_web',
+                'count': '20',
+                'version_code': '170400',
+                'version_name': '17.4.0',
+                'cookie_enabled': 'true',
+                'screen_width': '1920',
+                'screen_height': '1080',
+                'browser_language': 'zh-CN',
+                'browser_platform': 'Win32',
+                'browser_name': 'Chrome',
+                'browser_version': '120.0.0.0',
+                'browser_online': 'true',
+                'engine_name': 'Blink',
+                'engine_version': '120.0.0.0',
+                'os_name': 'Windows',
+                'os_version': '10',
+                'cpu_core_num': '16',
+                'device_memory': '8',
+                'platform': 'PC',
+                'downlink': '10',
+                'effective_type': '4g',
+                'round_trip_time': '50',
+                'webid': did,
+                'msToken': ms_token,
+                'X-Bogus': x_bogus,
+                '_signature': signature
+            }
+            
+            return params
+        except Exception as e:
+            logger.error(f"获取API参数失败: {str(e)}")
+            return {} 

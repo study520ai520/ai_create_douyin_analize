@@ -152,20 +152,27 @@ class DouyinDownloader:
         })
 
     def _make_request(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
-        """发送请求"""
-        try:
-            # 更新请求头
-            self._update_headers()
+        """发送HTTP请求
+        
+        Args:
+            method: 请求方法
+            url: 请求URL
+            **kwargs: 其他请求参数
             
-            # 添加随机延迟
-            time.sleep(random.uniform(1, 3))
+        Returns:
+            Response对象或None
+        """
+        try:
+            # 更新User-Agent
+            self.session.headers.update({
+                'User-Agent': random.choice(USER_AGENTS)
+            })
             
             # 发送请求
-            response = self.session.request(method, url, timeout=10, **kwargs)
+            response = self.session.request(method, url, **kwargs)
             
-            # 保存新的Cookies
-            if response.cookies:
-                self._save_cookies()
+            # 保存Cookies
+            self._save_cookies()
             
             return response
         except Exception as e:

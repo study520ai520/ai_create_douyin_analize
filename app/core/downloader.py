@@ -209,7 +209,24 @@ class DouyinDownloader:
         """
         try:
             # 访问主页获取初始cookies
-            response = self._make_request('GET', 'https://www.douyin.com/')
+            headers = {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'Accept-Language': 'zh-CN,zh;q=0.9',
+                'Cache-Control': 'max-age=0',
+                'Connection': 'keep-alive',
+                'Host': 'www.douyin.com',
+                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1',
+                'User-Agent': self.user_agent
+            }
+            
+            response = self._make_request('GET', 'https://www.douyin.com/', headers=headers)
             if not response or response.status_code != 200:
                 logger.error("访问主页失败")
                 return False
@@ -218,7 +235,12 @@ class DouyinDownloader:
             time.sleep(random.uniform(1, 3))
             
             # 访问用户页面
-            response = self._make_request('GET', user_url)
+            headers.update({
+                'Referer': 'https://www.douyin.com/',
+                'Sec-Fetch-Site': 'same-origin'
+            })
+            
+            response = self._make_request('GET', user_url, headers=headers)
             if not response or response.status_code != 200:
                 logger.error("访问用户页面失败")
                 return False
@@ -363,15 +385,18 @@ class DouyinDownloader:
             headers = {
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'zh-CN,zh;q=0.9',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Host': 'www.douyin.com',
+                'Pragma': 'no-cache',
                 'Referer': f'https://www.douyin.com/user/{user_id}',
-                'User-Agent': self.user_agent,
-                'Origin': 'https://www.douyin.com',
                 'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
                 'Sec-Ch-Ua-Mobile': '?0',
                 'Sec-Ch-Ua-Platform': '"Windows"',
                 'Sec-Fetch-Dest': 'empty',
                 'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin'
+                'Sec-Fetch-Site': 'same-origin',
+                'User-Agent': self.user_agent
             }
             
             # 添加随机延迟

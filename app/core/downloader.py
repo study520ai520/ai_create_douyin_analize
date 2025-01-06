@@ -29,11 +29,12 @@ USER_AGENTS = [
 class DouyinDownloader:
     """抖音视频下载器"""
 
-    def __init__(self, use_proxy: bool = False):
+    def __init__(self, use_proxy: bool = False, proxy_url: str = None):
         """初始化下载器
         
         Args:
             use_proxy: 是否使用代理
+            proxy_url: 代理服务器地址，如 http://127.0.0.1:7890
         """
         # 随机选择一个User-Agent
         self.user_agent = random.choice(USER_AGENTS)
@@ -69,8 +70,22 @@ class DouyinDownloader:
         # 设置代理
         self.proxies = None
         if use_proxy:
-            # TODO: 添加代理配置
-            pass
+            if proxy_url:
+                self.proxies = {
+                    'http': proxy_url,
+                    'https': proxy_url
+                }
+            else:
+                # 使用默认代理
+                self.proxies = {
+                    'http': 'http://127.0.0.1:7890',
+                    'https': 'http://127.0.0.1:7890'
+                }
+            self.session.proxies = self.proxies
+            logger.info(f"已设置代理: {self.proxies}")
+            
+        # 设置cookies文件路径
+        self.cookies_file = Path("data/cookies.pkl")
             
         # 加载cookies
         self._load_cookies()

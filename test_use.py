@@ -1,11 +1,18 @@
 """
 抖音视频下载工具使用示例
 """
+import os
+from pathlib import Path
 from loguru import logger
 from app.core.downloader import DouyinDownloader
 
+# 设置项目根目录
+ROOT_DIR = Path(__file__).parent
+
 # 配置日志
-logger.add("data/logs/test.log", rotation="500 MB", retention="10 days", level="INFO")
+LOG_DIR = ROOT_DIR / 'data' / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+logger.add(LOG_DIR / "test.log", rotation="500 MB", retention="10 days", level="INFO")
 
 def test_download_user_videos():
     """测试下载用户所有视频"""

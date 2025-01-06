@@ -256,14 +256,53 @@ class DouyinDownloader:
     def get_video_list(self, user_id: str, max_cursor: int = 0) -> Tuple[List[Dict], int]:
         """获取视频列表"""
         try:
-            api_url = f"https://www.douyin.com/web/api/v2/aweme/post/?user_id={user_id}&count=20&max_cursor={max_cursor}"
-            response = self._make_request('GET', api_url)
+            # 使用新的API端点
+            api_url = f"https://www.douyin.com/aweme/v1/web/aweme/post/"
+            params = {
+                'device_platform': 'webapp',
+                'aid': '6383',
+                'channel': 'channel_pc_web',
+                'sec_user_id': user_id,
+                'max_cursor': max_cursor,
+                'count': 20,
+                'version_code': '170400',
+                'version_name': '17.4.0',
+                'cookie_enabled': 'true',
+                'platform': 'PC',
+                'downlink': '10'
+            }
+            
+            headers = {
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'zh-CN,zh;q=0.9',
+                'Referer': f'https://www.douyin.com/user/{user_id}',
+                'User-Agent': self.user_agent
+            }
+            
+            # 保存请求信息用于调试
+            logger.debug(f"请求视频列表: {api_url}")
+            logger.debug(f"请求参数: {params}")
+            
+            response = self._make_request('GET', api_url, params=params, headers=headers)
             
             if not response or response.status_code != 200:
                 logger.error(f"获取视频列表失败: {response.status_code if response else 'No response'}")
+                # 保存响应内容用于调试
+                if response:
+                    debug_file = Path("data/logs/video_list_response.json")
+                    debug_file.write_text(response.text, encoding='utf-8')
+                    logger.info(f"已保存视频列表响应到: {debug_file}")
                 return [], 0
 
-            data = response.json()
+            try:
+                data = response.json()
+            except json.JSONDecodeError as e:
+                logger.error(f"解析视频列表JSON失败: {str(e)}")
+                debug_file = Path("data/logs/video_list_response.json")
+                debug_file.write_text(response.text, encoding='utf-8')
+                logger.info(f"已保存视频列表响应到: {debug_file}")
+                return [], 0
+
             videos = []
             for item in data.get('aweme_list', []):
                 video_info = {
@@ -283,9 +322,11 @@ class DouyinDownloader:
             has_more = data.get('has_more', False)
             next_cursor = data.get('max_cursor', 0) if has_more else 0
             
+            logger.info(f"成功获取视频列表: {len(videos)} 个视频")
             return videos, next_cursor
+            
         except Exception as e:
-            logger.error(f"获取视频列表失败: {str(e)}")
+            logger.exception(f"获取视频列表失败: {str(e)}")
             return [], 0
 
     def download_video(self, video_url: str, save_path: str) -> bool:

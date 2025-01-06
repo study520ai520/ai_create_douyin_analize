@@ -313,15 +313,28 @@ class DouyinDownloader:
                 'version_name': '17.4.0',
                 'cookie_enabled': 'true',
                 'platform': 'PC',
-                'downlink': '10'
+                'downlink': '10',
+                'msToken': '',  # 这个参数需要从cookie中获取
+                'X-Bogus': '',  # 这个参数需要从cookie中获取
+                '_signature': ''  # 这个参数需要从cookie中获取
             }
             
             headers = {
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'zh-CN,zh;q=0.9',
                 'Referer': f'https://www.douyin.com/user/{user_id}',
-                'User-Agent': self.user_agent
+                'User-Agent': self.user_agent,
+                'Origin': 'https://www.douyin.com',
+                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin'
             }
+            
+            # 添加随机延迟
+            time.sleep(random.uniform(1, 3))
             
             # 保存请求信息用于调试
             logger.debug(f"请求视频列表: {api_url}")
@@ -374,100 +387,158 @@ class DouyinDownloader:
             return [], 0
 
     def download_video(self, video_url: str, save_path: str) -> bool:
-        """下载视频"""
+        """下载视频
+        
+        Args:
+            video_url: 视频URL
+            save_path: 保存路径
+            
+        Returns:
+            bool: 是否下载成功
+        """
         try:
+            # 创建保存目录
+            save_dir = os.path.dirname(save_path)
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
+            
+            # 设置视频下载请求头
+            headers = {
+                'User-Agent': self.user_agent,
+                'Accept': '*/*',
+                'Accept-Language': 'zh-CN,zh;q=0.9',
+                'Accept-Encoding': 'identity;q=1, *;q=0',
+                'Range': 'bytes=0-',
+                'Referer': 'https://www.douyin.com/',
+                'Sec-Fetch-Dest': 'video',
+                'Sec-Fetch-Mode': 'no-cors',
+                'Sec-Fetch-Site': 'cross-site'
+            }
+            
+            # 添加随机延迟
+            time.sleep(random.uniform(1, 3))
+            
             # 获取视频内容
-            response = self._make_request('GET', video_url, stream=True)
-            if not response or response.status_code != 200:
+            response = self._make_request('GET', video_url, stream=True, headers=headers)
+            if not response or response.status_code not in [200, 206]:
                 logger.error(f"下载视频失败: {response.status_code if response else 'No response'}")
                 return False
 
-            # 保存视频
+            # 获取文件大小
             total_size = int(response.headers.get('content-length', 0))
             block_size = 1024 * 1024  # 1MB
+            downloaded_size = 0
             
+            # 保存视频
             with open(save_path, 'wb') as f:
                 for data in response.iter_content(block_size):
+                    downloaded_size += len(data)
                     f.write(data)
+                    # 打印下载进度
+                    if total_size > 0:
+                        progress = (downloaded_size / total_size) * 100
+                        logger.debug(f"下载进度: {progress:.1f}%")
+
+            # 验证文件大小
+            if total_size > 0 and os.path.getsize(save_path) != total_size:
+                logger.error(f"文件大小不匹配: 期望 {total_size}，实际 {os.path.getsize(save_path)}")
+                return False
 
             logger.info(f"视频下载完成: {save_path}")
             return True
+            
         except Exception as e:
             logger.error(f"下载视频失败: {str(e)}")
+            if os.path.exists(save_path):
+                try:
+                    os.remove(save_path)
+                    logger.info(f"已删除失败的下载文件: {save_path}")
+                except:
+                    pass
             return False
 
-    def download_all_videos(self, user_url: str, save_dir: str = None) -> List[Dict]:
-        """下载用户的所有视频"""
+    def download_all_videos(self, user_url: str) -> List[Dict]:
+        """下载用户所有视频
+        
+        Args:
+            user_url: 用户主页URL
+            
+        Returns:
+            List[Dict]: 下载结果列表，每个字典包含:
+                - video_id: 视频ID
+                - title: 视频标题
+                - status: 下载状态 (success/failed/skipped)
+                - error: 错误信息 (如果失败)
+                - path: 保存路径 (如果成功)
+        """
         try:
-            # 1. 解析用户URL
-            standard_url = self.parse_url(user_url)
-            if not standard_url:
+            # 解析用户URL
+            user_url = self.parse_url(user_url)
+            if not user_url:
                 raise Exception("无效的用户URL")
             
-            # 2. 获取用户信息
-            user_info = self.get_user_info(standard_url)
+            # 获取用户信息
+            user_info = self.get_user_info(user_url)
             if not user_info:
                 raise Exception("获取用户信息失败")
             
-            # 3. 创建保存目录
-            if save_dir is None:
-                save_dir = os.path.join("data/downloads", user_info['nickname'])
-            os.makedirs(save_dir, exist_ok=True)
+            # 创建下载目录
+            download_dir = Path("data/downloads") / user_info['nickname']
+            download_dir.mkdir(parents=True, exist_ok=True)
             
-            # 4. 获取并下载视频
-            download_results = []
+            # 获取所有视频
+            results = []
+            has_more = True
             max_cursor = 0
             
-            while True:
+            while has_more:
                 videos, next_cursor = self.get_video_list(user_info['user_id'], max_cursor)
-                if not videos:
-                    break
                 
                 for video in videos:
-                    try:
-                        # 构建保存路径
-                        video_name = f"{video['title'][:50]}_{video['video_id']}.mp4"
-                        video_name = re.sub(r'[\\/:*?"<>|]', '_', video_name)  # 移除非法字符
-                        save_path = os.path.join(save_dir, video_name)
-                        
-                        # 如果文件已存在，跳过下载
-                        if os.path.exists(save_path):
-                            logger.info(f"视频已存在，跳过下载: {save_path}")
-                            download_results.append({
-                                'video_id': video['video_id'],
-                                'title': video['title'],
-                                'status': 'skipped',
-                                'path': save_path
-                            })
-                            continue
-                        
+                    result = {
+                        'video_id': video['video_id'],
+                        'title': video['title'] or f"video_{video['video_id']}"
+                    }
+                    
+                    # 构建保存路径
+                    save_name = f"{result['title']}_{video['video_id']}.mp4"
+                    save_name = re.sub(r'[\\/:*?"<>|]', '_', save_name)  # 替换非法字符
+                    save_path = str(download_dir / save_name)
+                    
+                    # 检查是否已下载
+                    if os.path.exists(save_path):
+                        result.update({
+                            'status': 'skipped',
+                            'error': '文件已存在',
+                            'path': save_path
+                        })
+                    else:
                         # 下载视频
+                        logger.info(f"开始下载视频: {result['title']}")
                         if self.download_video(video['play_url'], save_path):
-                            download_results.append({
-                                'video_id': video['video_id'],
-                                'title': video['title'],
+                            result.update({
                                 'status': 'success',
                                 'path': save_path
                             })
                         else:
-                            raise Exception("下载失败")
-                        
-                        # 添加随机延时
-                        time.sleep(random.uniform(1, 3))
-                    except Exception as e:
-                        logger.error(f"下载视频失败: {video['video_id']}, 错误: {str(e)}")
-                        download_results.append({
-                            'video_id': video['video_id'],
-                            'title': video['title'],
-                            'status': 'failed',
-                            'error': str(e)
-                        })
+                            result.update({
+                                'status': 'failed',
+                                'error': '下载失败'
+                            })
+                    
+                    results.append(result)
                 
-                if not next_cursor or next_cursor == max_cursor:
-                    break
+                # 检查是否还有更多视频
+                if next_cursor == 0 or next_cursor == max_cursor:
+                    has_more = False
                 max_cursor = next_cursor
+                
+                # 添加延迟，避免请求过快
+                if has_more:
+                    time.sleep(random.uniform(1, 3))
             
-            return download_results
+            return results
+            
         except Exception as e:
-            logger.error(f"批量下载失败: {str(e)}")
+            logger.exception(f"批量下载失败: {str(e)}")
             raise 

@@ -106,7 +106,7 @@ class DouyinDownloader:
         
         # 设置基础请求头
         session.headers.update({
-            'User-Agent': random.choice(self.USER_AGENTS),
+            'User-Agent': random.choice(USER_AGENTS),
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
             'Accept-Encoding': 'gzip, deflate',

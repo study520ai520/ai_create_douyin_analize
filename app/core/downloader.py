@@ -7,6 +7,8 @@ import json
 import re
 import random
 import pickle
+import base64
+import urllib.parse
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 
@@ -160,25 +162,95 @@ class DouyinDownloader:
                 logger.error(f"获取用户页面失败: {response.status_code if response else 'No response'}")
                 return None
 
+            # 保存响应内容用于调试
+            debug_file = Path("data/logs/debug_response.html")
+            debug_file.write_text(response.text, encoding='utf-8')
+            logger.info(f"已保存调试响应到: {debug_file}")
+
             # 解析页面
             soup = BeautifulSoup(response.text, 'lxml')
             
-            # 提取用户信息
-            script_data = soup.find('script', id='RENDER_DATA')
-            if script_data:
-                data = json.loads(script_data.string)
-                user_data = data.get('user', {})
-                return {
-                    'user_id': user_data.get('uid'),
-                    'nickname': user_data.get('nickname'),
-                    'signature': user_data.get('signature'),
-                    'following_count': user_data.get('following_count'),
-                    'follower_count': user_data.get('follower_count'),
-                    'liked_count': user_data.get('total_favorited')
-                }
-            return None
+            # 尝试不同的数据提取方法
+            user_info = None
+            
+            # 方法1: 查找RENDER_DATA脚本
+            render_data = soup.find('script', id='RENDER_DATA')
+            if render_data:
+                try:
+                    # RENDER_DATA可能是base64编码的
+                    data_str = render_data.string
+                    if data_str:
+                        # 尝试base64解码
+                        try:
+                            data_str = base64.b64decode(data_str).decode('utf-8')
+                        except:
+                            pass
+                        data = json.loads(data_str)
+                        logger.debug(f"RENDER_DATA解析结果: {data}")
+                        
+                        # 遍历所有可能包含用户信息的字段
+                        for key, value in data.items():
+                            if isinstance(value, dict):
+                                user_data = value.get('user') or value.get('userInfo')
+                                if user_data:
+                                    user_info = {
+                                        'user_id': user_data.get('uid') or user_data.get('id'),
+                                        'nickname': user_data.get('nickname'),
+                                        'signature': user_data.get('signature'),
+                                        'following_count': user_data.get('following_count'),
+                                        'follower_count': user_data.get('follower_count'),
+                                        'liked_count': user_data.get('total_favorited')
+                                    }
+                                    break
+                except Exception as e:
+                    logger.error(f"解析RENDER_DATA失败: {str(e)}")
+
+            # 方法2: 查找用户信息相关的其他脚本
+            if not user_info:
+                for script in soup.find_all('script'):
+                    if script.string and 'userInfo' in script.string:
+                        try:
+                            # 使用正则提取JSON数据
+                            match = re.search(r'window\._SSR_HYDRATED_DATA\s*=\s*({.+?})</script>', script.string)
+                            if match:
+                                data = json.loads(match.group(1))
+                                user_data = data.get('userInfo', {})
+                                user_info = {
+                                    'user_id': user_data.get('uid') or user_data.get('id'),
+                                    'nickname': user_data.get('nickname'),
+                                    'signature': user_data.get('signature'),
+                                    'following_count': user_data.get('following_count'),
+                                    'follower_count': user_data.get('follower_count'),
+                                    'liked_count': user_data.get('total_favorited')
+                                }
+                                break
+                        except Exception as e:
+                            logger.error(f"解析脚本数据失败: {str(e)}")
+                            continue
+
+            # 方法3: 从URL中提取用户ID
+            if not user_info:
+                user_id = re.search(r'user/([^/?]+)', url)
+                if user_id:
+                    user_info = {
+                        'user_id': user_id.group(1),
+                        'nickname': 'Unknown',
+                        'signature': '',
+                        'following_count': 0,
+                        'follower_count': 0,
+                        'liked_count': 0
+                    }
+                    logger.warning("仅从URL提取到用户ID，其他信息未获取")
+
+            if user_info:
+                logger.info(f"成功获取用户信息: {user_info}")
+                return user_info
+            else:
+                logger.error("无法从页面提取用户信息")
+                return None
+
         except Exception as e:
-            logger.error(f"获取用户信息失败: {str(e)}")
+            logger.exception(f"获取用户信息失败: {str(e)}")
             return None
 
     def get_video_list(self, user_id: str, max_cursor: int = 0) -> Tuple[List[Dict], int]:

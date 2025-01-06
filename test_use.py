@@ -17,25 +17,17 @@ logger.add(LOG_DIR / "test.log", rotation="500 MB", retention="10 days", level="
 def test_download_user_videos():
     """测试下载用户所有视频"""
     try:
-        # 询问是否使用代理
-        print("是否使用代理？(y/n): ", end='')
-        use_proxy = input().strip().lower() == 'y'
+        # 使用默认配置
+        use_proxy = False
         proxy_url = None
-        if use_proxy:
-            print("请输入代理地址（直接回车使用默认代理http://127.0.0.1:7890）: ", end='')
-            proxy_url = input().strip()
-            if not proxy_url:
-                proxy_url = 'http://127.0.0.1:7890'
+        user_url = "https://www.douyin.com/user/MS4wLjABAAAAC8OzFMQUhcyt6GJhy0Tq5KX1kVM9jXoLzGDASFfEBn-shzaEQ_w3LBpT5uwQzbhA"
+        
+        logger.info(f"使用配置: use_proxy={use_proxy}, proxy_url={proxy_url}")
+        logger.info(f"测试URL: {user_url}")
         
         downloader = DouyinDownloader(use_proxy=use_proxy, proxy_url=proxy_url)
-        
-        # 输入用户URL
-        print("请输入抖音用户主页URL: ", end='')
-        user_url = input().strip()
-        if not user_url:
-            user_url = "https://www.douyin.com/user/MS4wLjABAAAAC8OzFMQUhcyt6GJhy0Tq5KX1kVM9jXoLzGDASFfEBn-shzaEQ_w3LBpT5uwQzbhA"
-        
         results = downloader.download_all_videos(user_url)
+        
         logger.info(f"下载完成，总计: {len(results)} 个视频")
         
         # 统计下载结果

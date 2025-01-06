@@ -198,9 +198,59 @@ class DouyinDownloader:
             logger.error(f"解析URL失败: {str(e)}")
             return None
 
+    def _init_user_session(self, user_url: str) -> bool:
+        """初始化用户会话，获取必要的cookies和参数
+        
+        Args:
+            user_url: 用户主页URL
+            
+        Returns:
+            bool: 是否初始化成功
+        """
+        try:
+            # 访问主页获取初始cookies
+            response = self._make_request('GET', 'https://www.douyin.com/')
+            if not response or response.status_code != 200:
+                logger.error("访问主页失败")
+                return False
+                
+            # 添加随机延迟
+            time.sleep(random.uniform(1, 3))
+            
+            # 访问用户页面
+            response = self._make_request('GET', user_url)
+            if not response or response.status_code != 200:
+                logger.error("访问用户页面失败")
+                return False
+            
+            # 解析ttwid
+            ttwid = response.cookies.get('ttwid')
+            if not ttwid:
+                logger.warning("未获取到ttwid")
+            
+            # 解析msToken
+            ms_token = response.cookies.get('msToken')
+            if not ms_token:
+                logger.warning("未获取到msToken")
+            
+            # 保存cookies
+            self._save_cookies()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"初始化用户会话失败: {str(e)}")
+            return False
+
     def get_user_info(self, url: str) -> Optional[Dict]:
         """获取用户信息"""
         try:
+            # 初始化用户会话
+            if not self._init_user_session(url):
+                logger.error("初始化用户会话失败")
+                return None
+            
+            # 获取用户页面
             response = self._make_request('GET', url)
             if not response or response.status_code != 200:
                 logger.error(f"获取用户页面失败: {response.status_code if response else 'No response'}")
